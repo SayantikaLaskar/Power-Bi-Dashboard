@@ -2,11 +2,17 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import glob
 
 # ---------------------------
 # 1. LOAD DATA
 # ---------------------------
-orders = pd.read_csv("Orders.csv")
+# Read all CSVs in the Orders folder
+orders_files = glob.glob("Orders/*.csv")  # make sure you use correct path
+orders_list = [pd.read_csv(f) for f in orders_files]
+orders = pd.concat(orders_list, ignore_index=True)
+
+# Read Returns and People
 returns = pd.read_excel("Returns.xlsx")
 people = pd.read_excel("People.xlsx")
 
@@ -21,7 +27,7 @@ data['Month'] = data['Order Date'].dt.month
 data['Month_Year'] = data['Order Date'].dt.to_period('M')
 
 # ---------------------------
-# 2. FILTERS / SIDEBAR
+# 2. SIDEBAR FILTERS
 # ---------------------------
 st.sidebar.title("Filters")
 selected_region = st.sidebar.multiselect("Select Region", options=data['Region'].unique(), default=data['Region'].unique())
@@ -35,19 +41,12 @@ filtered_data = data[
 ]
 
 # ---------------------------
-# 3. CALCULATIONS / METRICS
+# 3. METRICS
 # ---------------------------
 total_orders = filtered_data['Order ID'].nunique()
 return_count = filtered_data[filtered_data['Returned'] == "Yes"]['Order ID'].nunique()
-return_rate = return_count / total_orders
+return_rate = return_count / total_orders if total_orders > 0 else 0
 avg_return_value = filtered_data.loc[filtered_data['Returned'] == "Yes", "Sales"].mean()
-
-# YoY Return Rate
-return_rate_yoy = (
-    filtered_data.groupby("Year")
-    .apply(lambda x: x[x['Returned'] == "Yes"]['Order ID'].nunique() / x['Order ID'].nunique())
-    .pct_change()
-)
 
 # Top 5 Employees by Returns
 top5_employees = (
@@ -74,14 +73,11 @@ col1, col2, col3 = st.columns(3)
 col1.metric("Total Orders", total_orders)
 col2.metric("Return Count", return_count)
 col3.metric("Return Rate", f"{return_rate:.2%}")
-
 col1.metric("Avg Return Value", f"${avg_return_value:.2f}")
-col2.metric("YoY Return Rate Change", f"{return_rate_yoy.iloc[-1]:.2%}" if len(return_rate_yoy)>1 else "N/A")
 
 # ---------------------------
 # 5. VISUALIZATIONS
 # ---------------------------
-
 # Monthly Returns Trend
 st.subheader("Monthly Return Trend")
 fig, ax = plt.subplots(figsize=(10,5))
@@ -110,8 +106,6 @@ employee_contrib.plot(kind="pie", autopct="%1.1f%%", ax=ax3)
 ax3.set_ylabel("")
 st.pyplot(fig3)
 
-# ---------------------------
-# 6. OPTIONAL: DATA TABLE
-# ---------------------------
+# Data Table
 st.subheader("Filtered Data Table")
 st.dataframe(filtered_data)
